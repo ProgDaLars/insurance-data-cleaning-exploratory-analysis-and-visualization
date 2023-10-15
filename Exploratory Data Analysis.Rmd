@@ -1,0 +1,371 @@
+---
+title: Data Cleaning, Data Exploration, Data Modelling and Model Deployment using
+  R
+author: "Famous Salami | salamifamous@gmail.com"
+date: "15-10-2023"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+## Dataset: Records from an insurance company's recently insured drivers.
+### .
+### Importing Libraries
+```{r include = F} 
+getwd()
+library(caret)
+library(ggplot2)
+library(stringr)
+library(dplyr)
+library(corrplot)
+library(Hmisc)
+library(formattable)
+```
+
+```{r}
+#clears the R environment
+rm(list=ls())
+```
+
+```{r}
+#sets working directory to current directory
+setwd(getwd())
+```
+
+### .
+### Loading the dataset
+
+```{r}
+#Reading the data file
+insuredb <- read.csv("insurance.csv", stringsAsFactors = T)
+```
+
+### .
+### Inspecting and understanding the data
+
+```{r}
+#structure of the data
+str(insuredb)
+```
+
+
+```{r}
+#in-depth view of the data
+describe(insuredb)
+```
+
+```{r}
+#summary of the data, for insight in slightly different form
+summary(insuredb)
+```
+### .
+#### Observing the first 6 rows
+```{r}
+# Observing the first 6 rows
+head(insuredb)
+```
+```{r}
+min(insuredb$driver_age)
+```
+
+The dataset comprises 1,000 observations across 13 variables (columns). It comprises of information on insurance premiums, driver demographics, accident rates and car-related details within the United Kingdom.
+
+The insurance premiums range from £150.32 to £780.42, showcasing variability in policy costs. Driver ages span within the range of 17 to 86 years, with the average age being around 47.
+
+'crime_area' contains 22 missing values.
+
+'annual_mileage' also contains 32 missing values identified as NAs
+
+The 'gender' variable is meant to comprise categorical data but is messed up with some inconsistent values.
+
+More insights would be shared on this data with visualization tool, Power BI.
+
+
+### .
+### Data Cleaning and Preparation
+
+The features 'car_reg' and 'country' would not be suitable as predictor because the columns contain 1,000 unique values which is same as total observations and cannot guarantee suitable scientific prediction.
+
+```{r}
+insuredb$car_reg <- NULL #to remove the car_reg column
+
+insuredb$country <- NULL #to remove the country column
+
+summary(insuredb)
+```
+#### .
+##### Features 'annual_mileage' and 'crime_area' has NULL values, needs to be fixed
+
+```{r}
+#To determine best value to fix for the missing values of 'annual_mileage'
+ggplot(data = insuredb, aes(x = annual_mileage)) + 
+  geom_histogram(bins = 30, na.rm = TRUE, color="black", fill="white", position = "stack")
+
+```
+
+The histogram above is normally symmetric, therefore the mean of the column values is suitable as a replacement for the missing values.
+
+```{r}
+#get the mean of the values
+getMean = mean(insuredb$annual_mileage, na.rm = TRUE)
+
+insuredb$annual_mileage[is.na(insuredb$annual_mileage)] <- getMean
+#summary(insuredb)
+
+```
+
+```{r}
+#To determine best value to fix for the missing values of 'crime_area'
+
+ggplot(data = insuredb, aes(x = crime_area, y = insurance)) + geom_boxplot()
+
+```
+ 
+```{r}
+#to replace missing values with 'low' being the median
+insuredb$crime_area[(insuredb$crime_area == '')] <- 'low'
+
+insuredb$crime_area = droplevels(insuredb$crime_area)
+
+```
+
+#### .
+#### Transforming the 'gender' column to have consistent values, 'Male' and 'Female'
+```{r}
+#gender column transformation
+prepGender <- function(genderStr){
+  cSgenderStrtr <- as.character(genderStr)
+  if(str_length(genderStr) == 1){
+    if(genderStr == 'M') genderStr = as.factor('Male')
+    if(genderStr == 'F') genderStr = as.factor('Female')
+  }else{
+    genderStr = str_to_sentence(genderStr)
+  }
+  genderStr = as.factor(genderStr)
+}
+
+insuredb$gender = sapply(insuredb$gender, prepGender)
+#summary(insuredb$gender)
+```
+
+#### .
+#### Transforming the 'car_value' column to have consistent numerical data
+
+```{r}
+#car_value column transformation to get rid of £ and K from the values
+carValue <- function(cStr){
+  cStr <- as.character(cStr)
+  if(str_detect(cStr, 'K')){
+    newVal = str_remove_all(cStr, "[£K]")
+    newVal = as.numeric(newVal)
+    cStr = newVal * 1000
+  }
+  if(str_detect(cStr, ",")){
+    newVal = str_remove_all(cStr, "[£,]")
+    cStr = newVal
+  }  
+  cStr = as.numeric(cStr)
+}
+
+insuredb$car_value = sapply(insuredb$car_value, carValue)
+#summary(insuredb)
+```
+
+#### .
+#### Transforming the 'car_age' column to have consistent numerical data
+
+```{r}
+#car_age column transformation to get rid of Y(ear) and M(onth)
+
+carAge <- function(cStr){
+  cStr <- as.character(cStr)
+  if(str_detect(cStr, ' ')){
+    spVal = unlist(str_split(cStr, " "))
+    yr = str_remove_all(spVal[1], 'Y')
+    mth = str_remove_all(spVal[2], 'M')
+    nyr = as.numeric(yr)
+    nmth = as.numeric(mth)
+    yr = 12*nyr
+    cStr = yr + nmth
+  }
+  cStr = as.numeric(cStr)
+}
+
+insuredb$car_age = sapply(insuredb$car_age, carAge)
+
+```
+
+### .
+### Exploratory Data Analysis
+
+```{r}
+
+ggplot(data = insuredb, aes(x = insurance)) + 
+  geom_histogram(bins = 32, na.rm = TRUE,color="black", fill="white")
+```
+
+The histogram of insurance is skewed(positive) to the right.
+
+Most of the drivers spent less than the average insurance premium of (£310.8) while a few of the drivers spent more, up to (£700+).
+
+```{r}
+ggplot(data = insuredb, aes(x = annual_mileage, color=gender)) + geom_histogram(bins = 30, na.rm = TRUE, fill="white")
+
+```
+
+The histogram of annual_mileage is symmetrical. Shows a perfect balance in the miles traveled by drivers annually.
+
+• Key takeaway: for every person who drives more miles than the average (10,055 miles) annually, there's another person who drives fewer miles than the average.
+
+
+#### .
+#### Determining gender with highest annual mileage
+
+```{r}
+# Calculate the gender with the highest number of accidents
+result <- aggregate(annual_mileage ~ gender, data = insuredb, FUN = sum)
+#result
+male_miles <- result[result$gender == "Male", "annual_mileage"]
+female_miles <- result[result$gender == "Female", "annual_mileage"]
+
+cat("Total number miles traveled by males annually is:", 
+    sprintf("%s", prettyNum(male_miles, big.mark = ",", decimal.mark = ".")), ' miles\n')
+cat("Total number miles traveled by females annually is:", 
+    sprintf("%s", prettyNum(female_miles, big.mark = ",", decimal.mark = ".")),'miles')
+
+ggplot(result, aes(x = gender, y = annual_mileage)) + geom_bar(stat = "identity", fill = "orange") +
+  labs(x = "Gender", y = "Number of accidents")
+```
+
+#### .
+#### Determining gender with highest number of accidents
+
+```{r}
+# Calculate the gender with the highest number of accidents
+result <- aggregate(num_accident ~ gender, data = insuredb, FUN = sum)
+#result
+male_accidents <- result[result$gender == "Male", "num_accident"]
+female_accidents <- result[result$gender == "Female", "num_accident"]
+
+cat("Total number accidents by males is:", male_accidents, '\n')
+cat("Total number accidents by females is:", female_accidents)
+
+ggplot(result, aes(x = gender, y = num_accident)) + geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Gender", y = "Number of accidents")
+```
+
+#### .
+#### Determining gender with highest cars value (most expensive cars)
+
+```{r}
+# Calculate the gender with the highest number of accidents
+result <- aggregate(car_value ~ gender, data = insuredb, FUN = sum)
+#result
+male_cars <- result[result$gender == "Male", "car_value"]
+female_cars <- result[result$gender == "Female", "car_value"]
+
+cat("Total males cars value is:", sprintf("£%s", prettyNum(male_cars, big.mark = ",")), '\n')
+cat("Total females cars value is:", sprintf("£%s", prettyNum(female_cars, big.mark = ",")))
+
+ggplot(result, aes(x = gender, y = sprintf("£%s", prettyNum(car_value, big.mark = ",")))) +
+  geom_bar(stat = "identity", fill = "magenta") +
+  labs(x = "Gender", y = "Number of accidents")
+```
+
+#### .
+#### Determining insurance group with highest aggregated insurance premiums
+
+```{r}
+#result <- insuredb[which.max(insuredb$num_accident), "gender"]
+result <- aggregate(insurance ~ insurance_group, data = insuredb, FUN = sum)
+#result
+group1_insurance <- result[result$insurance_group == "Group 1", "insurance"]
+group2_insurance <- result[result$insurance_group == "Group 2", "insurance"]
+group3_insurance <- result[result$insurance_group == "Group 3", "insurance"]
+
+g1_2Currency <- sprintf("£%s", prettyNum(group1_insurance, big.mark = ",", decimal.mark = "."))
+g2_2Currency <- sprintf("£%s", prettyNum(group2_insurance, big.mark = ",", decimal.mark = "."))
+g3_2Currency <- sprintf("£%s", prettyNum(group3_insurance, big.mark = ",", decimal.mark = "."))
+
+cat("Total insurance premium paid by Group 1 is:", g1_2Currency, '\n')
+cat("Total insurance premium paid by Group 2 is:", g2_2Currency, '\n')
+cat("Total insurance premium paid by Group 3 is:", g3_2Currency)
+
+ggplot(result, aes(x = insurance_group, y = insurance)) + geom_bar(stat = "identity", fill = "purple") +
+labs(x = "Insurance group", y = "Insurance")
+
+
+```
+
+#### .
+#### Determining relationship between number of accident and driver's annual mileage
+
+```{r}
+ggplot(insuredb, aes(x = annual_mileage, y = num_accident)) +
+  geom_point() +
+  labs(x = "Annual Mileage", y = "Number of Accidents") +
+  ggtitle("Number of Accidents vs. Annual Mileage")
+
+```
+
+The plot reveals that as the number of miles driven annually increases, the number of accidents also increases. Therefore, if a driver drives a lot of miles each year, there's a higher chance he/she may be involved in more accidents and vice versa.
+
+• Application: An important insight for insurance or safety considerations. 
+
+• Decision support: It is important to consider annual mileage when assessing the risk of accidents in the context of insurance or safety planning.
+
+#### .
+#### Write the final transformed dataset to current directory for visualization in Power BI
+
+```{r}
+
+write.csv(insuredb, file.path(getwd(), "new_insurancedb.csv"), row.names = FALSE)
+
+```
+
+#### .
+##### Correlation between insurance and other key variables
+
+```{r}
+#corrplot(cor(insuredb[(1:7)]))
+
+corrplot(cor(insuredb[(1:7)]), method = "number")
+```
+
+### .
+### Conclusion
+• Insurance vs. Driver Age: Negative correlation between insurance costs and driver age. As a driver's age increases, insurance costs tend to decrease.
+
+• Insurance vs. Car Value: Positive correlation between insurance costs and the value of the car. Cars with higher value have higher insurance costs.
+
+• Insurance vs. Number of Accidents: Positive correlation between insurance costs and the number of accidents. For drivers involved in more accidents, their insurance costs seem to be higher.
+
+• Insurance vs. Annual Mileage: Positive correlation between insurance costs and the number of miles driven annually. The more miles driven, the higher the insurance costs.
+
+• Insurance vs. Car Age: Weak negative correlation between insurance costs and the age of the car. As the car gets older, insurance costs may slightly decrease.
+
+• The male gender are significantly involved in more accidents than the females, this might be because the males travel more miles than the females annually.
+
+• The male gender drives more expensive cars than the females but with a moderate margin.
+
+
+
+### .
+### Future Works
+My next work on this would be to:
+
+• build a predictive model
+
+• build a risk assessment model
+
+• create a Power BI visualization
+
+
+
+
+
+
+
+
+
