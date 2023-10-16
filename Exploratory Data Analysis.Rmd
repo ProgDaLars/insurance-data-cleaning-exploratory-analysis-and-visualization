@@ -235,7 +235,7 @@ cat("Total number miles traveled by females annually is:",
     sprintf("%s", prettyNum(female_miles, big.mark = ",", decimal.mark = ".")),'miles')
 
 ggplot(result, aes(x = gender, y = annual_mileage)) + geom_bar(stat = "identity", fill = "orange") +
-  labs(x = "Gender", y = "Number of accidents")
+  labs(x = "Gender", y = "Annual Mileage")
 ```
 
 #### .
