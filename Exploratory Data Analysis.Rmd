@@ -223,7 +223,7 @@ The histogram of annual_mileage is symmetrical. Shows a perfect balance in the m
 #### Determining gender with highest annual mileage
 
 ```{r}
-# Calculate the gender with the highest number of accidents
+# Calculate the gender with the highest annual mileage travels
 result <- aggregate(annual_mileage ~ gender, data = insuredb, FUN = sum)
 #result
 male_miles <- result[result$gender == "Male", "annual_mileage"]
