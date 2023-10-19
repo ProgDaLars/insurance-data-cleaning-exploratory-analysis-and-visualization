@@ -7,6 +7,6 @@ I shared meaningful insights about the data, the trends and observations, and al
 
 This was programmed in R language and aims at contributing to learning. My next release on this data would be to build predictive and risk assessment models and also create visualization in Power BI.
 
-Dataset source: Robert Gordon University School of Computing
+Dataset source: Data originates from an assessment at a course I did at Robert Gordon University.
 
 Limitation: This is an artificial data and does not represent a real-world scenario and should not be used in drawing real-world conclusions.
